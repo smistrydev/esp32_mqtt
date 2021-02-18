@@ -12,8 +12,8 @@ PubSubClient client(espClient);
 
 int LED_BUILTIN = 2;
 
-char ssid[] = SECRET_SSID; 
-char pass[] = SECRET_PASS; 
+char ssid[] = SECRET_SSID;
+char pass[] = SECRET_PASS;
 
 const char *mqtt_server = SECRET_MQTT_SERVER;
 const char *mqtt_username = SECRET_MQTT_USERNAME;
@@ -61,24 +61,35 @@ void reconnect_wifi()
   Serial.println(WiFi.localIP());
 }
 
-void callback(char* topic, byte* payload, unsigned int length) {
+void callback(char *topic, byte *payload, unsigned int length)
+{
 
-  // for (int i = 0; i < length; i++) {
-  //   Serial.print((char)payload[i]);
-  // }
-  // Serial.println();
+  String sPayload;
 
-  // Switch on the LED if an 1 was received as first character
-      
-    
-  if ((char)payload[0] == '1') {
-    digitalWrite(LED_BUILTIN, HIGH);   // Turn the LED on (Note that LOW is the voltage level
+  for (int i = 0; i < length; i++)
+  {
+    sPayload += (char)payload[i];
+  }
+
+  if ((char)payload[0] == '1')
+  {
+    digitalWrite(LED_BUILTIN, HIGH); // Turn the LED on (Note that LOW is the voltage level
     // but actually the LED is on; this is because
     // it is active low on the ESP-01)
     EEPROM.write(0, 1);
-  } else {
-    digitalWrite(LED_BUILTIN, LOW);  // Turn the LED off by making the voltage HIGH
+  }
+  else if ((char)payload[0] == '0')
+  {
+    digitalWrite(LED_BUILTIN, LOW); // Turn the LED off by making the voltage HIGH
     EEPROM.write(0, 0);
+  }
+  else if (sPayload == "234")
+  {
+    digitalWrite(LED_BUILTIN, HIGH); // Turn the LED off by making the voltage HIGH
+    EEPROM.write(0, 1);
+  }
+  else
+  {
   }
   EEPROM.commit();
 }
@@ -125,61 +136,64 @@ void setup()
 
   ArduinoOTA.begin();
 
-   client.setServer(mqtt_server, 1883);
-   client.setCallback(callback);
+  client.setServer(mqtt_server, 1883);
+  client.setCallback(callback);
 
-   EEPROM.begin(EEPROM_SIZE);
-   int ledState = EEPROM.read(0);
-   digitalWrite(LED_BUILTIN, ledState);
-
+  EEPROM.begin(EEPROM_SIZE);
+  int ledState = EEPROM.read(0);
+  digitalWrite(LED_BUILTIN, ledState);
 }
-
 
 void reconnect()
 {
-    // make sure wifi is connected
-    reconnect_wifi();
+  // make sure wifi is connected
+  reconnect_wifi();
 
-    // Loop until we're reconnected
-    while (!client.connected())
+  // Loop until we're reconnected
+  while (!client.connected())
+  {
+    Serial.print("Attempting MQTT connection...");
+    // Create a random client ID
+    String clientId = "mqtt_";
+    clientId += String(random(0xffff), HEX);
+    // Attempt to connect
+    if (client.connect(clientId.c_str(), mqtt_username, mqtt_password))
     {
-        Serial.print("Attempting MQTT connection...");
-        // Create a random client ID
-        String clientId = "mqtt_";
-        clientId += String(random(0xffff), HEX);
-        // Attempt to connect
-        if (client.connect(clientId.c_str(), mqtt_username, mqtt_password))
-        {
-            Serial.println("connected");
-            // Once connected, publish an announcement...
-            client.publish(TOPIC_PUBLISH_MESSAGE, PUBLISH_CONNECTED);
-            // ... and resubscribe
-            client.subscribe(TOPIC_SUBSCRIBE);
-        }
-        else
-        {
-            Serial.print("failed, rc=");
-            Serial.print(client.state());
-            Serial.println(" try again in 5 seconds");
-            // Wait 5 seconds before retrying
-            delay(5000);
-        }
+      Serial.println("connected");
+      // Once connected, publish an announcement...
+      client.publish(TOPIC_PUBLISH_MESSAGE, PUBLISH_CONNECTED);
+      // ... and resubscribe
+      client.subscribe(TOPIC_SUBSCRIBE);
     }
+    else
+    {
+      Serial.print("failed, rc=");
+      Serial.print(client.state());
+      Serial.println(" try again in 5 seconds");
+      // Wait 5 seconds before retrying
+      delay(5000);
+    }
+  }
 }
 
 void action_10s()
 {
-  reconnect_wifi();
+  if (!client.connected())
+  {
+    reconnect();
+  }
 }
 void action_5s() {}
 
-void action_2s() {
-//  digitalWrite(LED_BUILTIN, ledOn);
-//  ledOn = !ledOn;
+void action_2s()
+{
+  //  digitalWrite(LED_BUILTIN, ledOn);
+  //  ledOn = !ledOn;
 }
 
 void action_1s()
 {
+  client.loop();
 }
 void action_100ms() {}
 
@@ -189,11 +203,6 @@ void loop()
 {
 
   ArduinoOTA.handle();
-
-  if (!client.connected()) {
-     reconnect();
-  }
-  client.loop();
 
   currentMillis = millis();
   if ((currentMillis - prev_10s) >= 10000)
